@@ -1,0 +1,178 @@
+# Publishes @securevector/sdk, and the unscoped `securevector` alias, on a
+# version tag.
+#
+# ─── SETUP: OIDC TRUSTED PUBLISHING, NO SECRET ────────────────────────────────
+#
+# Same path the other SecureVector npm packages use. On npmjs.com, for EACH of
+# @securevector/sdk and securevector, under Settings, Publish access, Trusted
+# Publishers:
+#        Repository owner: Secure-Vector
+#        Repository name:  securevector-sdk-js
+#        Workflow name:    release.yml
+#        Environment:      production-npm        (must match the jobs below)
+#
+# Leave NPM_TOKEN unset. The env below still reads it, so a token remains a
+# working fallback if OIDC is ever unavailable; with no secret set it resolves
+# to empty and npm uses OIDC.
+#
+# THE FIRST PUBLISH is the one exception. A package that does not exist yet has
+# no settings page to add a trusted publisher to, so version one has to be
+# bootstrapped another way: check whether npm offers pre-registration for an
+# unpublished name, and if not, publish once with a token, revoke it, and never
+# set the secret here.
+#
+# ─── WHY THE APPROVAL GATE ────────────────────────────────────────────────────
+#
+# Trusted publishing already constrains publishes to this repo and this workflow
+# file. The environment gate adds a human to the loop so a hijacked workflow run
+# cannot silently ship a release of a security product. Configure it at
+#   Settings, Environments, New environment, name: production-npm,
+#   Required reviewers, add the repo owners.
+#
+# ─── WHY A TAG AND NOT A GITHUB RELEASE ───────────────────────────────────────
+#
+# The threat-monitor publishes npm and PyPI from one published Release, because
+# there the two version numbers must not drift. This package has no paired
+# artefact, so the tag is the trigger and the version checks below are what
+# catch a mistyped tag.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version being published, without the leading v'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify before publishing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm ci
+      - run: npm run build
+      - run: node --test test/*.test.mjs
+
+      - name: Assert zero runtime dependencies
+        run: |
+          COUNT=$(node -p "Object.keys(require('./package.json').dependencies || {}).length")
+          if [ "$COUNT" != "0" ]; then
+            echo "::error::@securevector/sdk must have zero runtime dependencies, found $COUNT."
+            exit 1
+          fi
+
+      # A mistyped tag would otherwise publish a version nobody asked for.
+      - name: Check the tag matches the package version
+        run: |
+          TAG="${TAG_NAME#v}"
+          SDK=$(node -p "require('./package.json').version")
+          ALIAS=$(node -p "require('./packages/alias/package.json').version")
+          PIN=$(node -p "require('./packages/alias/package.json').dependencies['@securevector/sdk']")
+          echo "tag=$TAG sdk=$SDK alias=$ALIAS pin=$PIN"
+          if [ "$TAG" != "$SDK" ] || [ "$SDK" != "$ALIAS" ] || [ "$SDK" != "$PIN" ]; then
+            echo "::error::tag, package version, alias version and alias pin must all be the same number."
+            exit 1
+          fi
+        env:
+          TAG_NAME: ${{ github.event.inputs.version || github.ref_name }}
+
+      - name: Check the CHANGELOG has an entry for this version
+        run: |
+          TAG="${TAG_NAME#v}"
+          if ! grep -q "^## \[$TAG\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$TAG]' entry."
+            exit 1
+          fi
+        env:
+          TAG_NAME: ${{ github.event.inputs.version || github.ref_name }}
+
+  publish-sdk:
+    name: Publish @securevector/sdk
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production-npm
+
+    permissions:
+      # Mint an OIDC token so npm can attach a provenance attestation.
+      id-token: write
+      # Least privilege: this job only reads the repo.
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # Provenance only signs when the publish target is set explicitly
+          # through setup-node.
+          registry-url: 'https://registry.npmjs.org/'
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Publish
+        # --provenance requires the id-token: write permission above; the
+        # attestation is signed by GitHub's OIDC infrastructure.
+        run: npm publish --provenance --access public
+        env:
+          # Unset means empty means OIDC.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-alias:
+    name: Publish the unscoped securevector alias
+    # Strictly after the scoped package: the alias pins an exact version of it,
+    # so publishing the alias first would ship a package that cannot install.
+    needs: publish-sdk
+    runs-on: ubuntu-latest
+    environment: production-npm
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
+
+      # The alias is three one-line files, so there is nothing to build and
+      # nothing to install. Wait for the registry to serve the version it pins,
+      # rather than assuming the previous job's publish is visible instantly.
+      - name: Wait for the scoped package to be installable
+        working-directory: packages/alias
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          for i in $(seq 1 30); do
+            if npm view "@securevector/sdk@$VERSION" version > /dev/null 2>&1; then
+              echo "@securevector/sdk@$VERSION is on the registry"
+              exit 0
+            fi
+            echo "attempt $i: not visible yet, waiting"
+            sleep 10
+          done
+          echo "::error::@securevector/sdk@$VERSION never became visible; the alias would not install."
+          exit 1
+
+      - name: Publish
+        working-directory: packages/alias
+        run: npm publish --provenance --access public
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

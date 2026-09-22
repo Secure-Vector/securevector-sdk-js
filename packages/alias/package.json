@@ -1,0 +1,52 @@
+{
+  "name": "securevector",
+  "version": "6.0.0",
+  "description": "Unscoped alias for @securevector/sdk. Re-exports everything; the scoped package is the real one and the owner lock.",
+  "keywords": [
+    "securevector",
+    "ai-security",
+    "llm-security",
+    "agent-security",
+    "observability"
+  ],
+  "homepage": "https://securevector.io",
+  "bugs": "https://github.com/Secure-Vector/securevector-sdk-js/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Secure-Vector/securevector-sdk-js.git",
+    "directory": "packages/alias"
+  },
+  "license": "Apache-2.0",
+  "author": "SecureVector",
+  "type": "module",
+  "main": "./index.cjs",
+  "module": "./index.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs",
+      "require": "./index.cjs",
+      "default": "./index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "index.cjs",
+    "index.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@securevector/sdk": "6.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

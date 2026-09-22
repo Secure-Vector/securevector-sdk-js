@@ -1,0 +1,109 @@
+# Build and test on every supported Node. The unit suite runs against the
+# BUILT output rather than the TypeScript source, so a broken dual build fails
+# here rather than at a user's `require()`.
+#
+# The live suite is not run here on purpose: it needs a SecureVector app on
+# loopback, and it skips cleanly when there is none. `npm test` is therefore
+# green on a runner with nothing running, which is what CI should mean.
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # `npm ci` rather than `npm install`: the package has no runtime
+      # dependencies, but a lockfile plus `ci` is what makes the dev toolchain
+      # reproducible rather than whatever npm resolves on the day.
+      - name: Install
+        run: npm ci
+
+      - name: Build (ESM, CJS, types)
+        run: npm run build
+
+      - name: Unit tests
+        run: node --test test/*.test.mjs
+
+      # The zero-dependency promise is the reason to pick this package over one
+      # that pulls a tree in. Asserting it in CI is what keeps it true: a
+      # `dependencies` block added in a careless PR fails the build.
+      - name: Assert zero runtime dependencies
+        run: |
+          COUNT=$(node -p "Object.keys(require('./package.json').dependencies || {}).length")
+          echo "runtime dependencies: $COUNT"
+          if [ "$COUNT" != "0" ]; then
+            echo "::error::@securevector/sdk must have zero runtime dependencies, found $COUNT."
+            exit 1
+          fi
+
+      # Both entry points must actually load. A wrong `exports` map or a missing
+      # dist/cjs/package.json marker only shows up at import time.
+      - name: Smoke test both module formats
+        run: |
+          node -e "import('./dist/esm/index.js').then(m => { if (typeof m.guard !== 'function') throw new Error('ESM export missing'); console.log('esm ok'); })"
+          node -e "const m = require('./dist/cjs/index.js'); if (typeof m.guard !== 'function') throw new Error('CJS export missing'); console.log('cjs ok');"
+
+      - name: Check the packed tarball carries only what it should
+        run: |
+          npm pack --dry-run --json > pack.json
+          node -e "
+            const files = require('./pack.json')[0].files.map(f => f.path);
+            const stray = files.filter(f => !/^(dist\/|README\.md|LICENSE|CHANGELOG\.md|package\.json)/.test(f));
+            if (stray.length) { console.error('unexpected files in the tarball:', stray); process.exit(1); }
+            console.log(files.length + ' files, all expected');
+          "
+
+  version-lock:
+    name: Alias version matches the SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The unscoped alias re-exports an exact version. If the two drift,
+      # `npm i securevector` installs a different SDK than `npm i
+      # @securevector/sdk`, which is the one thing an alias must never do.
+      - name: Compare versions
+        run: |
+          SDK=$(node -p "require('./package.json').version")
+          ALIAS=$(node -p "require('./packages/alias/package.json').version")
+          PIN=$(node -p "require('./packages/alias/package.json').dependencies['@securevector/sdk']")
+          echo "sdk=$SDK alias=$ALIAS pin=$PIN"
+          if [ "$SDK" != "$ALIAS" ] || [ "$SDK" != "$PIN" ]; then
+            echo "::error::packages/alias must be version $SDK and pin @securevector/sdk@$SDK."
+            exit 1
+          fi
+
+  secret-scan:
+    name: No secrets in source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan
+        run: |
+          echo "Scanning for potential secrets before any publish..."
+          if grep -rn -E "\b(password|secret|private.*key)\s*[:=]\s*['\"][^'\"]{10,}" src/; then
+            echo "::error::Potential secrets found in source."
+            exit 1
+          fi
+          echo "Security scan passed"
