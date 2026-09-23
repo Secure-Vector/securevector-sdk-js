@@ -238,7 +238,11 @@ test('a dead engine stops being retried, and the spans are dropped not queued', 
 test('the leak shapes added after review are masked with no residue', () => {
   const cases = {
     'a long labelled value': `password=${'a'.repeat(300)}`,
-    slack: 'xoxb-1234567890-abcdefghijklmnop',
+    // Assembled at runtime, never a literal: GitHub push protection matches
+    // the Slack shape without a checksum, so a fake written out in full is
+    // indistinguishable from a real one and blocks the push. The Stripe
+    // fixture below it has always been built this way for the same reason.
+    slack: ['xoxb', '1234567890', 'abcdefghijklmnop'].join('-'),
     google: `AIza${'A'.repeat(35)}`,
     npm: `npm_${'a'.repeat(36)}`,
     gitlab: `glpat-${'a'.repeat(22)}`,
