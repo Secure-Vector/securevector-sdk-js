@@ -154,8 +154,8 @@ Pointing at a self-hosted engine instead of a local app needs one variable:
 
 ```bash
 export SECUREVECTOR_ENGINE_ENDPOINT=https://your-securevector-endpoint
-# Optional. Only if that endpoint requires a token; the local app never does.
-export SECUREVECTOR_API_KEY=<SecureVector account key or SVET token>
+# Only when the engine is hosted in the cloud.
+export SECUREVECTOR_API_KEY=<your key>
 ```
 
 With the local app, no key or account is needed.
@@ -170,7 +170,7 @@ With the local app, no key or account is needed.
 | `SECUREVECTOR_SDK_RISK_THRESHOLD` | `70` | Risk score at or above which enforce mode blocks. |
 | `SECUREVECTOR_SDK_TIMEOUT_MS` | `3000` | Per-request timeout. A timeout is a fail-open, never a block. |
 | `SECUREVECTOR_SDK_DISABLED` | unset | `1`, `true`, `yes` or `on` turns the whole SDK into a pass-through. |
-| `SECUREVECTOR_API_KEY` | unset | **Optional. Not needed for the local app.** Set it only when your endpoint requires a token: your SecureVector account key, or the SVET ingress token of a self-hosted engine. Sent as `Authorization: Bearer`. |
+| `SECUREVECTOR_API_KEY` | unset | **Only when the engine is hosted in the cloud.** Not needed for the local app. Sent as `Authorization: Bearer`. |
 
 The names and their precedence match the Python SDK and the per-framework SDKs,
 so one set of variables configures an agent fleet that mixes runtimes.
