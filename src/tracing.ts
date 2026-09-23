@@ -44,7 +44,7 @@ export const FLUSH_INTERVAL_MS = 200;
 export const FLUSH_MAX_SPANS = 200;
 
 /** The scope version reported in every batch. */
-export const SDK_VERSION = '6.0.1';
+export const SDK_VERSION = '6.0.2';
 
 /** What a span represents. Generation maps to CLIENT, tool to INTERNAL. */
 export type SpanKind = 'generation' | 'tool';
