@@ -1,6 +1,6 @@
 {
   "name": "securevector",
-  "version": "6.0.1",
+  "version": "6.0.2",
   "description": "Unscoped alias for @securevector/sdk. Re-exports everything; the scoped package is the real one and the owner lock.",
   "keywords": [
     "securevector",
@@ -43,7 +43,7 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "@securevector/sdk": "6.0.1"
+    "@securevector/sdk": "6.0.2"
   },
   "publishConfig": {
     "access": "public",

@@ -3,6 +3,22 @@
 All notable changes to `@securevector/sdk` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.0.2]
+
+### Security
+
+- **Endpoint slash trimming no longer backtracks.** Trailing slashes on
+  `SECUREVECTOR_ENGINE_ENDPOINT` / `SECUREVECTOR_SDK_APP_URL` were removed with
+  `/\/+$/`, which runs in quadratic time on a long run of slashes that is not at
+  the end of the value (CodeQL `js/polynomial-redos`). It is a linear loop now.
+  The input is a local environment variable, so the practical exposure was
+  small.
+
+### Added
+
+- `SECURITY.md` with private reporting and how to verify provenance with
+  `npm audit signatures`.
+
 ## [6.0.1]
 
 Documentation and release plumbing. No change to what the SDK does at runtime.
