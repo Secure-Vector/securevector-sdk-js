@@ -42,13 +42,8 @@ attached to it.
 
 ## Quick start
 
-**Start the SecureVector app first.** This package is a client: it asks a
-SecureVector engine for a verdict and sends it traces, so with nothing
-listening it degrades to a no-op and your agent runs unscanned. `npx @securevector/cli`
-starts the local app, or point `SECUREVECTOR_ENGINE_ENDPOINT` at your own
-engine. See [The app must be running](#the-app-must-be-running).
-
-Then three calls. Nothing else is required.
+With the app running (see [Requirements](#requirements)), three calls. Nothing
+else is required.
 
 ```ts
 import { guard, session, generation } from '@securevector/sdk';
@@ -134,7 +129,7 @@ restore();
 ### Flushing
 
 Spans are batched and flushed every 200 ms, at 200 spans, and when the event
-loop drains. A process that calls `process.exit()` skips that last one, so flush
+loop drains at the end of the process. A process that calls `process.exit()` skips that last one, so flush
 explicitly in a short-lived script or a serverless handler:
 
 ```ts
@@ -169,7 +164,7 @@ export SECUREVECTOR_API_KEY=<SecureVector account key or SVET token>
 | --- | --- | --- |
 | `SECUREVECTOR_ENGINE_ENDPOINT` | unset | App or self-hosted engine URL. Wins over `SECUREVECTOR_SDK_APP_URL`. |
 | `SECUREVECTOR_SDK_APP_URL` | `http://127.0.0.1:8741` | Same thing, used when the one above is unset or empty. |
-| `SECUREVECTOR_SDK_MODE` | `observe` | `observe` or `enforce`. An unknown value falls back to `observe`. |
+| `SECUREVECTOR_SDK_MODE` | `observe` | `observe` or `enforce`. Any other value falls back to `observe` and logs a warning saying so. |
 | `SECUREVECTOR_SDK_RISK_THRESHOLD` | `70` | Risk score at or above which enforce mode blocks. |
 | `SECUREVECTOR_SDK_TIMEOUT_MS` | `3000` | Per-request timeout. A timeout is a fail-open, never a block. |
 | `SECUREVECTOR_SDK_DISABLED` | unset | `1`, `true`, `yes` or `on` turns the whole SDK into a pass-through. |
@@ -192,17 +187,19 @@ masked shapes are API keys, GitHub and AWS credentials, JWTs, PEM private keys
 and labelled secret assignments, the same list the agent-runtime plugins use.
 The app masks again on its side.
 
-Traffic goes to your local app or to your own endpoint. Nothing is sent to
-SecureVector.
+Traffic goes only to the local app or to the endpoint you set. The SDK has no
+telemetry of its own. When that endpoint is not this machine, the SDK names the
+host in a warning before the first preview leaves, and says so again if the
+connection is plain HTTP.
 
 ## API
 
 | Export | What it is |
 | --- | --- |
 | `guard(fn, opts)` | Wrap a function. Returns an async function with the same arguments. |
-| `GuardBlocked` | The error enforce mode throws. Carries `toolId`, `rule`, `riskScore`, `verdict`. |
-| `session(id, opts, fn)` | Run `fn` with one session id and identity. |
-| `setIdentity(opts)` | The same, without nesting. Returns a restore function. |
+| `GuardBlocked` | The error enforce mode throws. Carries `toolId`, `rule`, `reason`, `riskScore`, `verdict`. |
+| `session(id, [opts], fn)` | Run `fn` with one session id, and optionally `userId` and `tags`. |
+| `setIdentity(opts)`, `clearIdentity()` | The same, without nesting. `setIdentity` returns a restore function. |
 | `generation(opts)` | Open a model-call span. Await it, then `.end({ output, usage })`. |
 | `flush()` | Send buffered spans now. |
 | `currentSession()`, `currentGenerationSpan()`, `identity()` | Read the run context. |
