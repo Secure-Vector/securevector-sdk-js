@@ -77,3 +77,14 @@ test('config: the API key is read and explicit overrides beat the environment', 
   assert.equal(cfg.mode, 'enforce');
   assert.equal(cfg.timeoutMs, 1234);
 });
+
+test('trailing slashes are trimmed in linear time', async () => {
+  const { trimTrailingSlashes } = await import('../dist/esm/config.js');
+  assert.equal(trimTrailingSlashes('http://127.0.0.1:8741///'), 'http://127.0.0.1:8741');
+  assert.equal(trimTrailingSlashes('http://127.0.0.1:8741'), 'http://127.0.0.1:8741');
+  assert.equal(trimTrailingSlashes('///'), '');
+  const hostile = 'http://h' + '/'.repeat(200000) + 'x';
+  const t0 = process.hrtime.bigint();
+  assert.equal(trimTrailingSlashes(hostile), hostile);
+  assert.ok(Number(process.hrtime.bigint() - t0) / 1e6 < 50, 'should be linear');
+});
