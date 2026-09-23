@@ -11,7 +11,7 @@
  *   SECUREVECTOR_SDK_RISK_THRESHOLD  risk score at or above which enforce blocks (70)
  *   SECUREVECTOR_SDK_TIMEOUT_MS      per-request timeout (3000)
  *   SECUREVECTOR_SDK_DISABLED        1 turns the SDK into a no-op
- *   SECUREVECTOR_API_KEY             forwarded as a bearer token to a self-hosted engine
+ *   SECUREVECTOR_API_KEY             optional; sent as a bearer token only when set, for a public endpoint gated with an inbound token
  */
 
 import { warnOnce } from './warn.js';
