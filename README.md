@@ -13,6 +13,16 @@
 npm install @securevector/sdk
 ```
 
+## Requirements
+
+| | |
+|---|---|
+| **Node** | 20 or newer |
+| **The SecureVector app, running** | This package is a client. Verdicts, rules, the audit chain and the Traces page live in the app at `http://127.0.0.1:8741`. Start it with `npx @securevector/cli` (needs Python 3.10+ on PATH) or `pip install "securevector-ai-monitor[app]" && securevector-app --web`. Or point `SECUREVECTOR_ENGINE_ENDPOINT` at your own engine. |
+
+With no app listening, the SDK fails open: your agent runs normally, unscanned,
+and one warning is logged. Details in [The app must be running](#the-app-must-be-running).
+
 ## Zero runtime dependencies
 
 This package declares no `dependencies`. Installing it adds exactly one package
@@ -34,7 +44,7 @@ attached to it.
 
 **Start the SecureVector app first.** This package is a client: it asks a
 SecureVector engine for a verdict and sends it traces, so with nothing
-listening it degrades to a no-op and your agent runs unscanned. `securevector`
+listening it degrades to a no-op and your agent runs unscanned. `npx @securevector/cli`
 starts the local app, or point `SECUREVECTOR_ENGINE_ENDPOINT` at your own
 engine. See [The app must be running](#the-app-must-be-running).
 
@@ -139,7 +149,9 @@ tamper-evident audit chain and the Traces page all live in the SecureVector
 local app, which must be running at `http://127.0.0.1:8741`:
 
 ```bash
-pip install securevector-ai-monitor
+npx @securevector/cli                 # Node route, needs Python 3.10+ on PATH
+# or
+pip install "securevector-ai-monitor[app]"
 securevector-app --web
 ```
 
