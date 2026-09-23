@@ -11,9 +11,10 @@
 #        Workflow name:    release.yml
 #        Environment:      production-npm        (must match the jobs below)
 #
-# Leave NPM_TOKEN unset. The env below still reads it, so a token remains a
-# working fallback if OIDC is ever unavailable; with no secret set it resolves
-# to empty and npm uses OIDC.
+# OIDC only, the way n8n-nodes-securevector publishes. The publish steps read
+# no token at all, so a stray NPM_TOKEN secret can never become a second,
+# unreviewed way to publish. Match n8n's Publishing access setting too:
+# "Require two-factor authentication and disallow tokens".
 #
 # THE FIRST PUBLISH is the one exception. A package that does not exist yet has
 # no settings page to add a trusted publisher to, so version one has to be
@@ -28,6 +29,17 @@
 # cannot silently ship a release of a security product. Configure it at
 #   Settings, Environments, New environment, name: production-npm,
 #   Required reviewers, add the repo owners.
+#   Deployment branches and tags: selected, tag pattern v* only.
+#
+# ─── MAIN ONLY ────────────────────────────────────────────────────────────────
+#
+# Three layers, each enough on its own to stop a publish from anywhere else:
+#   1. The environment accepts only v* tags, so a run on a branch never gets
+#      the OIDC token npm trusts.
+#   2. Every job refuses any ref that is not a v* tag.
+#   3. The tagged commit must already be on main. A tag pushed on any other
+#      branch fails in verify, before anything is published.
+# Tags themselves are protected by the protect-release-tags ruleset.
 #
 # ─── WHY A TAG AND NOT A GITHUB RELEASE ───────────────────────────────────────
 #
@@ -41,11 +53,8 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # Start a dispatch on a v* tag; it is refused on a branch.
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version being published, without the leading v'
-        required: true
 
 permissions:
   contents: read
@@ -53,15 +62,29 @@ permissions:
 jobs:
   verify:
     name: Verify before publishing
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to commit SHAs: a moved tag on a third-party action
+      # must not be able to run inside a workflow that can mint a publish token.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Full history so the main check below can see the branch.
+          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - name: Refuse anything that is not on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main. Publish only from main."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - run: node --test test/*.test.mjs
 
@@ -86,7 +109,7 @@ jobs:
             exit 1
           fi
         env:
-          TAG_NAME: ${{ github.event.inputs.version || github.ref_name }}
+          TAG_NAME: ${{ github.ref_name }}
 
       - name: Check the CHANGELOG has an entry for this version
         run: |
@@ -96,11 +119,12 @@ jobs:
             exit 1
           fi
         env:
-          TAG_NAME: ${{ github.event.inputs.version || github.ref_name }}
+          TAG_NAME: ${{ github.ref_name }}
 
   publish-sdk:
     name: Publish @securevector/sdk
     needs: verify
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: production-npm
 
@@ -111,32 +135,35 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: '20'
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          # Node 24 ships npm 11, the first major that can publish through
+          # trusted publishing (11.5.1 and later). Node 20's npm 10 cannot.
+          node-version: '24'
           # Provenance only signs when the publish target is set explicitly
           # through setup-node.
           registry-url: 'https://registry.npmjs.org/'
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run build
 
       - name: Publish
         # --provenance requires the id-token: write permission above; the
         # attestation is signed by GitHub's OIDC infrastructure.
-        run: npm publish --provenance --access public
-        env:
-          # Unset means empty means OIDC.
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm --version
+          npm publish --provenance --access public
 
   publish-alias:
     name: Publish the unscoped securevector alias
     # Strictly after the scoped package: the alias pins an exact version of it,
     # so publishing the alias first would ship a package that cannot install.
     needs: publish-sdk
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: production-npm
 
@@ -145,11 +172,13 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: '20'
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org/'
 
       # The alias is three one-line files, so there is nothing to build and
@@ -172,7 +201,6 @@ jobs:
 
       - name: Publish
         working-directory: packages/alias
-        run: npm publish --provenance --access public
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm --version
+          npm publish --provenance --access public
