@@ -154,8 +154,11 @@ Pointing at a self-hosted engine instead of a local app needs one variable:
 
 ```bash
 export SECUREVECTOR_ENGINE_ENDPOINT=https://your-securevector-endpoint
-# Only when the engine is hosted in the cloud.
-export SECUREVECTOR_API_KEY=<your key>
+# OPTIONAL: only if your endpoint is publicly exposed and gated with an inbound token.
+# A private endpoint in your own VPC needs no key. To gate a public one, use a free
+# SecureVector cloud account API key or an SVET token. It gates access only; no agent
+# data is sent to SecureVector.
+export SECUREVECTOR_API_KEY=<SecureVector account key or SVET token>
 ```
 
 With the local app, no key or account is needed.
@@ -167,26 +170,30 @@ The app deployed to your own cloud with the SecureVector Terraform modules
 [Azure](https://github.com/Secure-Vector/terraform-azurerm-securevector),
 [Google Cloud](https://github.com/Secure-Vector/terraform-google-securevector),
 [Oracle Cloud](https://github.com/Secure-Vector/terraform-oci-securevector))
-has no key issued by SecureVector. You create one, give it to the engine, and
-give the same value to the SDK:
+needs a key only when its endpoint is public. The key is whatever value you give
+the module as `ingress_token`; the engine then requires it on every request
+except `/health`, and the SDK sends the same value.
 
-```bash
-# 1. Generate a random token.
-export TF_VAR_ingress_token="$(openssl rand -hex 32)"
+1. Get a key: create a free account at
+   [app.securevector.io](https://app.securevector.io), then under **Access
+   Management** create an API key. An SVET token works too. The key only gates
+   access to your engine; no agent data is sent to SecureVector.
+2. Give it to the module and apply:
 
-# 2. Apply. The module passes it to the engine as its ingress token, and the
-#    engine then requires it on every request except /health. An environment
-#    variable keeps the token out of your shell history.
-terraform apply
+   ```bash
+   export TF_VAR_ingress_token=<your key>   # an env var keeps it out of shell history
+   terraform apply
+   ```
 
-# 3. Give the SDK the endpoint from `terraform output` and the same token.
-export SECUREVECTOR_ENGINE_ENDPOINT=<the endpoint URL>
-export SECUREVECTOR_API_KEY="$TF_VAR_ingress_token"
-```
+3. Point the SDK at the endpoint from `terraform output`, with the same key:
 
-Leave `ingress_token` unset only when the endpoint is reachable from a private
-network alone; then no key is needed. Keep the token in your secret manager,
-not in source, and rotate it by applying a new value and updating the agents.
+   ```bash
+   export SECUREVECTOR_ENGINE_ENDPOINT=<the endpoint URL>
+   export SECUREVECTOR_API_KEY=<your key>
+   ```
+
+A private endpoint reachable only inside your VPC needs no key. Keep the key in
+your secret manager, not in source.
 
 ## Environment variables
 
@@ -198,7 +205,7 @@ not in source, and rotate it by applying a new value and updating the agents.
 | `SECUREVECTOR_SDK_RISK_THRESHOLD` | `70` | Risk score at or above which enforce mode blocks. |
 | `SECUREVECTOR_SDK_TIMEOUT_MS` | `3000` | Per-request timeout. A timeout is a fail-open, never a block. |
 | `SECUREVECTOR_SDK_DISABLED` | unset | `1`, `true`, `yes` or `on` turns the whole SDK into a pass-through. |
-| `SECUREVECTOR_API_KEY` | unset | **Only when the engine is hosted in the cloud.** Not needed for the local app. Sent as `Authorization: Bearer`. |
+| `SECUREVECTOR_API_KEY` | unset | **Optional.** Only when your endpoint is publicly exposed and gated with an inbound token. Not needed for the local app or a private endpoint. Sent as `Authorization: Bearer`. |
 
 The names and their precedence match the Python SDK and the per-framework SDKs,
 so one set of variables configures an agent fleet that mixes runtimes.
