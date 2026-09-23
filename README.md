@@ -153,7 +153,9 @@ securevector-app --web
 Pointing at a self-hosted engine instead of a local app needs one variable:
 
 ```bash
-export SECUREVECTOR_ENGINE_ENDPOINT=https://your-securevector-endpoint
+# point at your SecureVector endpoint — all you need for a private (in-VPC) endpoint
+export SECUREVECTOR_ENGINE_ENDPOINT=https://<your-securevector-endpoint>
+
 # OPTIONAL: only if your endpoint is publicly exposed and gated with an inbound token.
 # A private endpoint in your own VPC needs no key. To gate a public one, use a free
 # SecureVector cloud account API key or an SVET token. It gates access only; no agent
