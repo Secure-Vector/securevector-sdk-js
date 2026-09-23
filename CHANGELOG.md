@@ -3,6 +3,28 @@
 All notable changes to `@securevector/sdk` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.0.1]
+
+Documentation and release plumbing. No change to what the SDK does at runtime.
+
+### Changed
+
+- **Requirements first.** The README now opens with what the SDK needs: Node 20
+  or newer, and the SecureVector app running (`npx @securevector/cli` or
+  `pip install "securevector-ai-monitor[app]"`), or a self-hosted engine.
+- **`SECUREVECTOR_API_KEY` is documented as optional.** It is only for a public
+  endpoint gated with an inbound token; the local app and a private endpoint
+  need no key. The README explains how to create one for an engine hosted in
+  your own cloud.
+- **Publishing goes through GitHub Actions with trusted publishing and a manual
+  approval**, from `main` only, with provenance on every release from this one on.
+
+### Fixed
+
+- The README's app install command was missing the `[app]` extra, and Quick
+  start named `securevector` (this package's alias) as the command that starts
+  the app.
+
 ## [6.0.0]
 
 First release. Ships with SecureVector 6.0.0, and the version number tracks the
