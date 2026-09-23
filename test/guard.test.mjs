@@ -224,6 +224,18 @@ test('an API key is forwarded as a bearer token', async (t) => {
   assert.equal(app.find('/analyze')[0].headers.authorization, 'Bearer svet_test');
 });
 
+test('the API key is optional: without one no Authorization header is sent', async (t) => {
+  const app = await startFakeApp((req) => (req.path === '/analyze' ? { body: cleanBody() } : null));
+  t.after(() => app.close());
+  const c = cfg(app.url);
+  assert.equal(c.apiKey, '');
+  const tool = guard(async () => 'x', { toolId: 't', config: c, transport: new AppTransport(c) });
+  assert.equal(await tool('q'), 'x');
+  for (const req of [...app.find('/analyze'), ...app.find('/api/tool-permissions/call-audit')]) {
+    assert.equal(req.headers.authorization, undefined);
+  }
+});
+
 test('session groups calls under one id and carries identity', async (t) => {
   const app = await startFakeApp((req) => (req.path === '/analyze' ? { body: cleanBody() } : null));
   t.after(() => app.close());
