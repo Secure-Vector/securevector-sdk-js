@@ -160,6 +160,34 @@ export SECUREVECTOR_API_KEY=<your key>
 
 With the local app, no key or account is needed.
 
+### The key for an engine hosted in your cloud
+
+The app deployed to your own cloud with the SecureVector Terraform modules
+([AWS](https://github.com/Secure-Vector/terraform-aws-securevector),
+[Azure](https://github.com/Secure-Vector/terraform-azurerm-securevector),
+[Google Cloud](https://github.com/Secure-Vector/terraform-google-securevector),
+[Oracle Cloud](https://github.com/Secure-Vector/terraform-oci-securevector))
+has no key issued by SecureVector. You create one, give it to the engine, and
+give the same value to the SDK:
+
+```bash
+# 1. Generate a random token.
+export TF_VAR_ingress_token="$(openssl rand -hex 32)"
+
+# 2. Apply. The module passes it to the engine as its ingress token, and the
+#    engine then requires it on every request except /health. An environment
+#    variable keeps the token out of your shell history.
+terraform apply
+
+# 3. Give the SDK the endpoint from `terraform output` and the same token.
+export SECUREVECTOR_ENGINE_ENDPOINT=<the endpoint URL>
+export SECUREVECTOR_API_KEY="$TF_VAR_ingress_token"
+```
+
+Leave `ingress_token` unset only when the endpoint is reachable from a private
+network alone; then no key is needed. Keep the token in your secret manager,
+not in source, and rotate it by applying a new value and updating the agents.
+
 ## Environment variables
 
 | Variable | Default | What it does |
