@@ -104,6 +104,16 @@ function noteEndpoint(baseUrl: string): string {
   return baseUrl;
 }
 
+/**
+ * Drop trailing slashes. A loop rather than `/\/+$/`, which backtracks
+ * quadratically on a long run of slashes that is not at the end.
+ */
+export function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47 /* / */) end--;
+  return url.slice(0, end);
+}
+
 function intOr(value: string | undefined, fallback: number): number {
   if (value === undefined || value === '') return fallback;
   const n = Number.parseInt(String(value).trim(), 10);
@@ -147,7 +157,7 @@ export function configFromEnv(overrides: ConfigOverrides = {}, env: Env = proces
     }
     cfg.mode = 'observe';
   }
-  cfg.baseUrl = cfg.baseUrl.replace(/\/+$/, '');
+  cfg.baseUrl = trimTrailingSlashes(cfg.baseUrl);
   cfg.baseUrl = noteEndpoint(cfg.baseUrl);
   return cfg;
 }
